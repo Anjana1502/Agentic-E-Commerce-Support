@@ -1,0 +1,7 @@
+# The project intentionally requires NO third-party packages.
+# It runs on the Python standard library (3.8+, tested on 3.12).
+#
+# Optional (not needed for the demo): if you later plug an LLM planner into
+# src/ecomagent/agent.py via function calling, install your provider SDK, e.g.:
+#   pip install openai            # OpenAI-compatible models
+#   pip install ibm-watsonx-ai    # IBM watsonx.ai for /v1/chat endpoints
