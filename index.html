@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>E-commerce Support Agent</title>
+<style>
+  :root {
+    --bg: #0f172a; --panel: #1e293b; --bubble-user: #2563eb; --bubble-ai: #334155;
+    --text: #e2e8f0; --muted: #94a3b8; --accent: #38bdf8; --line: #334155;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", system-ui, sans-serif; display: flex; flex-direction: column;
+    height: 100vh;
+  }
+  header {
+    padding: 14px 22px; border-bottom: 1px solid var(--line);
+    background: var(--panel); display: flex; align-items: center; gap: 12px;
+  }
+  header .dot { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg,#38bdf8,#6366f1); display:grid; place-items:center; font-weight:700; }
+  header h1 { font-size: 16px; margin: 0; }
+  header p { margin: 0; font-size: 12px; color: var(--muted); }
+  #chips {
+    padding: 10px 22px; border-bottom: 1px solid var(--line);
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+  }
+  #chips span { font-size: 12px; color: var(--muted); margin-right: 4px; }
+  .chip {
+    border: 1px solid var(--line); background: transparent; color: var(--accent);
+    padding: 6px 12px; border-radius: 999px; font-size: 12px; cursor: pointer;
+  }
+  .chip:hover { background: var(--bubble-ai); }
+  #messages { flex: 1; overflow-y: auto; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; }
+  .msg { max-width: 70%; padding: 10px 14px; border-radius: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; font-size: 14px; }
+  .msg.user { align-self: flex-end; background: var(--bubble-user); }
+  .msg.ai { align-self: flex-start; background: var(--bubble-ai); }
+  .trace {
+    align-self: flex-start; max-width: 70%; font-size: 11px; color: var(--muted);
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
+  }
+  .trace summary { cursor: pointer; color: var(--accent); }
+  .trace .row { padding: 2px 0; }
+  .trace .ok { color: #4ade80; }
+  .trace .fail { color: #f87171; }
+  .typing { align-self: flex-start; color: var(--muted); font-size: 13px; }
+  footer { border-top: 1px solid var(--line); padding: 12px 22px; display: flex; gap: 10px; background: var(--panel); }
+  #input { flex: 1; background: var(--bg); border: 1px solid var(--line); color: var(--text); border-radius: 10px; padding: 10px 14px; font-size: 14px; outline: none; }
+  #input:focus { border-color: var(--accent); }
+  #send { background: var(--accent); border: 0; color: #0f172a; border-radius: 10px; padding: 0 18px; font-weight: 700; cursor: pointer; }
+  #send:hover { filter: brightness(1.1); }
+</style>
+</head>
+<body>
+  <header>
+    <div class="dot">AI</div>
+    <div>
+      <h1>E-commerce Customer Support Agent</h1>
+      <p>Agentic AI demo &middot; plan &rarr; tool calls &rarr; respond &middot; memory &amp; escalation</p>
+    </div>
+  </header>
+  <div id="chips">
+    <span>Try:</span>
+    <button class="chip">what is the status of ORD-1024?</button>
+    <button class="chip">I want to return ORD-1026</button>
+    <button class="chip">cancel ORD-1025</button>
+    <button class="chip">show me wireless headphones</button>
+    <button class="chip">what is your return policy?</button>
+    <button class="chip">track ORD-9001</button>
+    <button class="chip">talk to a human</button>
+  </div>
+  <div id="messages"></div>
+  <footer>
+    <input id="input" placeholder="Type your message..." autocomplete="off">
+    <button id="send">Send</button>
+  </footer>
+<script>
+  const sessions = new Map();
+  const sid = "sid-" + Math.random().toString(36).slice(2);
+  const messagesEl = document.getElementById("messages");
+  const inputEl = document.getElementById("input");
+  const sendEl = document.getElementById("send");
+
+  function esc(s){ const d=document.createElement("div"); d.textContent=s; return d.innerHTML; }
+
+  function addMsg(role, text){
+    const div = document.createElement("div");
+    div.className = "msg " + role;
+    div.textContent = text;
+    messagesEl.appendChild(div);
+    return div;
+  }
+
+  function addTrace(trace){
+    if (!trace || !trace.length) return;
+    const det = document.createElement("details");
+    det.className = "trace";
+    const cap = document.createElement("summary");
+    cap.textContent = "Agent steps: " + trace.length + " tool call(s)";
+    det.appendChild(cap);
+    trace.forEach(t => {
+      const row = document.createElement("div");
+      row.className = "row";
+      const status = t.ok ? '<span class="ok">[ok]</span>' : '<span class="fail">[fail]</span>';
+      row.innerHTML = status + " " + esc(t.tool) +
+        (t.ok ? " " + esc(JSON.stringify(t.args)) : " -> " + esc(t.error));
+      det.appendChild(row);
+    });
+    messagesEl.appendChild(det);
+  }
+
+  async function send(text){
+    if (!text) return;
+    addMsg("user", text);
+    const typing = document.createElement("div");
+    typing.className = "typing"; typing.textContent = "agent is thinking...";
+    messagesEl.appendChild(typing);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sid, message: text })
+      });
+      const data = await res.json();
+      typing.remove();
+      addMsg("ai", data.reply);
+      addTrace(data.trace);
+    } catch (err) {
+      typing.remove();
+      addMsg("ai", "Connection error: " + err);
+    }
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  sendEl.addEventListener("click", () => { send(inputEl.value); inputEl.value = ""; });
+  inputEl.addEventListener("keydown", e => { if (e.key === "Enter") { send(inputEl.value); inputEl.value = ""; } });
+  document.querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => send(c.textContent)));
+
+  send("hi");
+</script>
+</body>
+</html>
